@@ -24,6 +24,25 @@ const formatNumber = (value) => {
   return num % 1 === 0 ? num.toString() : num.toFixed(1);
 };
 
+const defaultGoals = {
+  calories: 2000,
+  protein: 150,
+  carbs: 250,
+  fat: 70
+};
+
+const loadGoals = () => {
+  if (typeof window === 'undefined') return defaultGoals;
+  try {
+    const stored = window.localStorage.getItem('macroGoals');
+    if (!stored) return defaultGoals;
+    const parsed = JSON.parse(stored);
+    return { ...defaultGoals, ...parsed };
+  } catch (error) {
+    return defaultGoals;
+  }
+};
+
 export default function App() {
   const [date, setDate] = useState(getLocalDate());
   const [entries, setEntries] = useState([]);
@@ -33,6 +52,7 @@ export default function App() {
   const [view, setView] = useState('meals');
   const [editingId, setEditingId] = useState(null);
   const [menuOpenId, setMenuOpenId] = useState(null);
+  const [goals, setGoals] = useState(loadGoals);
 
   const totalStats = useMemo(() => {
     const totals = summary?.totals || {};
@@ -43,6 +63,41 @@ export default function App() {
       { label: 'Fat', value: formatNumber(totals.fat), unit: 'g' }
     ];
   }, [summary]);
+
+  const goalStats = useMemo(() => {
+    const totals = summary?.totals || {};
+    const build = (key, label, unit) => {
+      const goalValue = Number(goals[key]);
+      const goal = Number.isFinite(goalValue) && goalValue > 0 ? goalValue : 0;
+      const consumed = Number(totals[key] || 0);
+      const progress = goal > 0 ? Math.min((consumed / goal) * 100, 100) : 0;
+      const remaining = goal - consumed;
+      const remainingLabel =
+        goal === 0
+          ? 'Set a goal'
+          : remaining >= 0
+            ? `${formatNumber(remaining)} ${unit} left`
+            : `${formatNumber(Math.abs(remaining))} ${unit} over`;
+
+      return {
+        key,
+        label,
+        unit,
+        goal,
+        consumed,
+        progress,
+        remainingLabel,
+        isOver: goal > 0 && consumed > goal
+      };
+    };
+
+    return [
+      build('calories', 'Calories', 'kcal'),
+      build('protein', 'Protein', 'g'),
+      build('carbs', 'Carbs', 'g'),
+      build('fat', 'Fat', 'g')
+    ];
+  }, [goals, summary]);
 
   const fetchData = async (targetDate = date) => {
     setStatus((prev) => ({ ...prev, loading: true, error: '' }));
@@ -71,10 +126,23 @@ export default function App() {
     fetchData(date);
   }, [date]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem('macroGoals', JSON.stringify(goals));
+  }, [goals]);
+
   const handleFormChange = (field) => (event) => {
     const value = event.target.value;
     setForm((prev) => ({ ...prev, [field]: value }));
     setStatus((prev) => ({ ...prev, error: '', success: '' }));
+  };
+
+  const handleGoalChange = (field) => (event) => {
+    const value = event.target.value;
+    setGoals((prev) => ({
+      ...prev,
+      [field]: value === '' ? '' : Number(value)
+    }));
   };
 
   const startEdit = (entry) => {
@@ -406,6 +474,84 @@ export default function App() {
           {!status.loading && (view === 'meals' ? mealsContent : totalsContent)}
         </section>
       </main>
+
+      <section className="card goals-card">
+        <div className="goals-header">
+          <div>
+            <p className="eyebrow">Daily goals</p>
+            <h2>Macro goals & progress</h2>
+            <p className="muted">
+              Set targets once and track how much you have left for the day.
+            </p>
+          </div>
+        </div>
+        <div className="goals-grid">
+          <div className="goals-inputs">
+            <label>
+              Calories goal (kcal)
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={goals.calories}
+                onChange={handleGoalChange('calories')}
+              />
+            </label>
+            <label>
+              Protein goal (g)
+              <input
+                type="number"
+                min="0"
+                step="0.1"
+                value={goals.protein}
+                onChange={handleGoalChange('protein')}
+              />
+            </label>
+            <label>
+              Carbs goal (g)
+              <input
+                type="number"
+                min="0"
+                step="0.1"
+                value={goals.carbs}
+                onChange={handleGoalChange('carbs')}
+              />
+            </label>
+            <label>
+              Fat goal (g)
+              <input
+                type="number"
+                min="0"
+                step="0.1"
+                value={goals.fat}
+                onChange={handleGoalChange('fat')}
+              />
+            </label>
+          </div>
+          <div className="goals-bars">
+            {goalStats.map((goal) => (
+              <div className="goal-item" key={goal.key}>
+                <div className="goal-row">
+                  <div>
+                    <strong>{goal.label}</strong>
+                    <span className="muted">Goal: {formatNumber(goal.goal)} {goal.unit}</span>
+                  </div>
+                  <span className={`goal-remaining${goal.isOver ? ' over' : ''}`}>
+                    {goal.remainingLabel}
+                  </span>
+                </div>
+                <div className={`goal-bar${goal.isOver ? ' over' : ''}`}>
+                  <span style={{ width: `${goal.progress}%` }} />
+                </div>
+                <div className="goal-meta">
+                  <span>{formatNumber(goal.consumed)} {goal.unit} consumed</span>
+                  <span>{Math.round(goal.progress)}%</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

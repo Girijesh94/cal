@@ -98,6 +98,94 @@ body {
   gap: 24px;
 }
 
+.goals-card {
+  margin-top: 28px;
+}
+
+.goals-header h2 {
+  font-family: 'Fraunces', serif;
+  margin: 0 0 6px;
+}
+
+.goals-grid {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) minmax(320px, 1.4fr);
+  gap: 24px;
+  margin-top: 18px;
+}
+
+.goals-inputs {
+  display: grid;
+  gap: 14px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px dashed var(--line);
+  border-radius: 16px;
+  padding: 16px;
+}
+
+.goals-bars {
+  display: grid;
+  gap: 16px;
+}
+
+.goal-item {
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  padding: 14px 16px;
+}
+
+.goal-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.goal-row strong {
+  display: block;
+  font-size: 1rem;
+}
+
+.goal-remaining {
+  font-size: 0.85rem;
+  color: var(--teal);
+  font-weight: 600;
+}
+
+.goal-remaining.over {
+  color: #b23b3b;
+}
+
+.goal-bar {
+  position: relative;
+  height: 10px;
+  border-radius: 999px;
+  background: #f4e7d9;
+  overflow: hidden;
+}
+
+.goal-bar span {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: linear-gradient(90deg, #e07a5f, #f2b39b);
+}
+
+.goal-bar.over span {
+  background: linear-gradient(90deg, #b23b3b, #e07a5f);
+}
+
+.goal-meta {
+  margin-top: 8px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
 .card {
   background: rgba(255, 250, 243, 0.95);
   border: 1px solid var(--line);
