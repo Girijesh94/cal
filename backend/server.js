@@ -1,6 +1,6 @@
 const express = require('express');
 const cors = require('cors');
-const { initDb, run, all, get } = require('./db');
+const { initDb, run, all, get, dbPath } = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -33,7 +33,7 @@ const asyncHandler = (handler) => (req, res) => {
 };
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok' });
+  res.json({ status: 'ok', dbPath });
 });
 
 app.post(
@@ -82,6 +82,108 @@ app.post(
       id: result.id,
       ...payload
     });
+  })
+);
+
+app.put(
+  '/api/meals/:id',
+  asyncHandler(async (req, res) => {
+    const rawId = String(req.params.id || '').trim();
+    const id = Number(rawId);
+    if (!Number.isInteger(id)) {
+      return res.status(400).json({ message: 'Invalid meal id.' });
+    }
+
+    const { date, meal, calories, protein, carbs, fat, notes } = req.body || {};
+
+    const payload = {
+      date: (date || '').trim(),
+      meal: (meal || '').trim(),
+      calories: parseNumber(calories),
+      protein: parseNumber(protein),
+      carbs: parseNumber(carbs),
+      fat: parseNumber(fat),
+      notes: notes ? String(notes).trim() : ''
+    };
+
+    const errors = [];
+    if (!payload.date) errors.push('Date is required.');
+    if (!payload.meal) errors.push('Meal name is required.');
+    if (payload.calories === null) errors.push('Calories must be a number.');
+    if (payload.protein === null) errors.push('Protein must be a number.');
+    if (payload.carbs === null) errors.push('Carbs must be a number.');
+    if (payload.fat === null) errors.push('Fat must be a number.');
+
+    if (errors.length > 0) {
+      return res.status(400).json({ message: 'Validation error', errors });
+    }
+
+    const updateSql = `
+      UPDATE meal_entries
+      SET entry_date = ?, meal = ?, calories = ?, protein = ?, carbs = ?, fat = ?, notes = ?
+      WHERE id = ?
+    `;
+
+    const result = await run(updateSql, [
+      payload.date,
+      payload.meal,
+      payload.calories,
+      payload.protein,
+      payload.carbs,
+      payload.fat,
+      payload.notes,
+      id
+    ]);
+
+    if (result.changes === 0) {
+      const fallbackResult = await run(
+        `UPDATE meal_entries
+         SET entry_date = ?, meal = ?, calories = ?, protein = ?, carbs = ?, fat = ?, notes = ?
+         WHERE TRIM(CAST(id AS TEXT)) = ?`,
+        [
+          payload.date,
+          payload.meal,
+          payload.calories,
+          payload.protein,
+          payload.carbs,
+          payload.fat,
+          payload.notes,
+          rawId
+        ]
+      );
+
+      if (fallbackResult.changes === 0) {
+        return res.status(404).json({ message: 'Meal not found.', dbPath });
+      }
+    }
+
+    res.json({ id, ...payload });
+  })
+);
+
+app.delete(
+  '/api/meals/:id',
+  asyncHandler(async (req, res) => {
+    const rawId = String(req.params.id || '').trim();
+    const id = Number(rawId);
+    if (!Number.isInteger(id)) {
+      return res.status(400).json({ message: 'Invalid meal id.' });
+    }
+
+    const result = await run('DELETE FROM meal_entries WHERE id = ?', [id]);
+
+    if (result.changes === 0) {
+      const fallbackResult = await run(
+        'DELETE FROM meal_entries WHERE TRIM(CAST(id AS TEXT)) = ?',
+        [rawId]
+      );
+
+      if (fallbackResult.changes === 0) {
+        return res.status(404).json({ message: 'Meal not found.', dbPath });
+      }
+    }
+
+    res.json({ deleted: true });
   })
 );
 

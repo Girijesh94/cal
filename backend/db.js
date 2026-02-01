@@ -67,6 +67,7 @@ const get = (sql, params = []) =>
 
 module.exports = {
   db,
+  dbPath,
   initDb,
   run,
   all,

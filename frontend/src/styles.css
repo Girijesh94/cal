@@ -234,12 +234,77 @@ textarea:focus {
   background: #fff;
 }
 
+.meal-card.editing {
+  border-color: rgba(224, 122, 95, 0.6);
+  box-shadow: 0 12px 24px -20px rgba(224, 122, 95, 0.9);
+}
+
 .meal-card header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: 12px;
   margin-bottom: 12px;
+}
+
+.meal-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.menu {
+  position: relative;
+}
+
+.menu-trigger {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 10px;
+  padding: 2px 10px 6px;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.menu-trigger:hover {
+  color: var(--ink);
+  border-color: rgba(224, 122, 95, 0.6);
+}
+
+.menu-list {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 6px;
+  min-width: 140px;
+  box-shadow: 0 18px 40px -24px rgba(31, 19, 11, 0.6);
+  display: grid;
+  gap: 4px;
+  z-index: 10;
+}
+
+.menu-list button {
+  border: none;
+  background: transparent;
+  padding: 8px 10px;
+  text-align: left;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.menu-list button:hover {
+  background: #f7ece0;
+}
+
+.menu-list .danger {
+  color: #b23b3b;
 }
 
 .meal-card h3 {
@@ -317,6 +382,34 @@ textarea:focus {
 .section-title {
   font-size: 1rem;
   margin: 0 0 10px;
+}
+
+.edit-banner {
+  margin-top: 16px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: #fbece3;
+  border: 1px solid rgba(224, 122, 95, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.9rem;
+  color: var(--ink);
+}
+
+.ghost {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ghost:hover {
+  border-color: rgba(224, 122, 95, 0.6);
+  color: var(--accent-dark);
 }
 
 .meal-summary {
