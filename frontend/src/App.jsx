@@ -31,6 +31,8 @@ export default function App() {
   const [form, setForm] = useState(emptyForm);
   const [status, setStatus] = useState({ loading: false, error: '', success: '' });
   const [view, setView] = useState('meals');
+  const [editingId, setEditingId] = useState(null);
+  const [menuOpenId, setMenuOpenId] = useState(null);
 
   const totalStats = useMemo(() => {
     const totals = summary?.totals || {};
@@ -75,24 +77,47 @@ export default function App() {
     setStatus((prev) => ({ ...prev, error: '', success: '' }));
   };
 
+  const startEdit = (entry) => {
+    setEditingId(entry.id);
+    setDate(entry.date || date);
+    setForm({
+      meal: entry.meal || '',
+      calories: entry.calories?.toString() || '',
+      protein: entry.protein?.toString() || '',
+      carbs: entry.carbs?.toString() || '',
+      fat: entry.fat?.toString() || '',
+      notes: entry.notes || ''
+    });
+    setStatus({ loading: false, error: '', success: '' });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setForm(emptyForm);
+    setStatus({ loading: false, error: '', success: '' });
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     setStatus({ loading: true, error: '', success: '' });
 
     try {
-      const response = await fetch(`${API_URL}/api/meals`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          date,
-          meal: form.meal,
-          calories: form.calories,
-          protein: form.protein,
-          carbs: form.carbs,
-          fat: form.fat,
-          notes: form.notes
-        })
-      });
+      const response = await fetch(
+        editingId ? `${API_URL}/api/meals/${editingId}` : `${API_URL}/api/meals`,
+        {
+          method: editingId ? 'PUT' : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            date,
+            meal: form.meal,
+            calories: form.calories,
+            protein: form.protein,
+            carbs: form.carbs,
+            fat: form.fat,
+            notes: form.notes
+          })
+        }
+      );
 
       const payload = await response.json().catch(() => ({}));
 
@@ -103,23 +128,86 @@ export default function App() {
       }
 
       setForm(emptyForm);
-      setStatus({ loading: false, error: '', success: 'Meal saved!' });
+      setEditingId(null);
+      setMenuOpenId(null);
+      setStatus({ loading: false, error: '', success: editingId ? 'Meal updated!' : 'Meal saved!' });
       await fetchData(date);
     } catch (error) {
       setStatus({ loading: false, error: 'Unable to save meal.', success: '' });
     }
   };
 
+  const handleDelete = async (id) => {
+    const confirmDelete = window.confirm('Delete this meal entry?');
+    if (!confirmDelete) return;
+
+    setStatus({ loading: true, error: '', success: '' });
+
+    try {
+      const response = await fetch(`${API_URL}/api/meals/${id}`, {
+        method: 'DELETE'
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        const message = payload?.message || 'Unable to delete meal.';
+        setStatus({ loading: false, error: message, success: '' });
+        return;
+      }
+
+      if (editingId === id) {
+        cancelEdit();
+      }
+      setMenuOpenId(null);
+      setStatus({ loading: false, error: '', success: 'Meal deleted.' });
+      await fetchData(date);
+    } catch (error) {
+      setStatus({ loading: false, error: 'Unable to delete meal.', success: '' });
+    }
+  };
+
   const mealsContent = entries.length ? (
     <div className="meal-list">
       {entries.map((entry) => (
-        <article className="meal-card" key={entry.id}>
+        <article className={`meal-card${entry.id === editingId ? ' editing' : ''}`} key={entry.id}>
           <header>
             <div>
               <h3>{entry.meal}</h3>
               <p className="meal-notes">{entry.notes || 'No notes'}</p>
             </div>
-            <span className="pill">{new Date(entry.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+            <div className="meal-actions">
+              <span className="pill">{new Date(entry.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+              <div className="menu">
+                <button
+                  className="menu-trigger"
+                  type="button"
+                  onClick={() => setMenuOpenId(menuOpenId === entry.id ? null : entry.id)}
+                  aria-label="Meal actions"
+                >
+                  ...
+                </button>
+                {menuOpenId === entry.id && (
+                  <div className="menu-list">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        startEdit(entry);
+                        setMenuOpenId(null);
+                      }}
+                    >
+                      Update
+                    </button>
+                    <button
+                      type="button"
+                      className="danger"
+                      onClick={() => handleDelete(entry.id)}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
           </header>
           <div className="macro-row">
             <span>Calories</span>
@@ -207,6 +295,14 @@ export default function App() {
         <section className="card form-card">
           <h2>Add a meal</h2>
           <p className="muted">Capture what you just ate and the macros that went with it.</p>
+          {editingId && (
+            <div className="edit-banner">
+              <span>Editing meal entry</span>
+              <button className="ghost" type="button" onClick={cancelEdit}>
+                Cancel
+              </button>
+            </div>
+          )}
           <form onSubmit={handleSubmit}>
             <label>
               Meal name
@@ -276,7 +372,7 @@ export default function App() {
             {status.error && <p className="status error">{status.error}</p>}
             {status.success && <p className="status success">{status.success}</p>}
             <button className="primary" type="submit" disabled={status.loading}>
-              {status.loading ? 'Saving...' : 'Save meal'}
+              {status.loading ? 'Saving...' : editingId ? 'Update meal' : 'Save meal'}
             </button>
           </form>
         </section>
