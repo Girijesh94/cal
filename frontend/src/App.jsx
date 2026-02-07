@@ -8,6 +8,10 @@ const emptyForm = {
   protein: '',
   carbs: '',
   fat: '',
+  zinc: '',
+  magnesium: '',
+  potassium: '',
+  sodium: '',
   notes: ''
 };
 
@@ -28,7 +32,11 @@ const defaultGoals = {
   calories: 2000,
   protein: 150,
   carbs: 250,
-  fat: 70
+  fat: 70,
+  zinc: 11,
+  magnesium: 400,
+  potassium: 3400,
+  sodium: 2300
 };
 
 const loadGoals = () => {
@@ -49,6 +57,13 @@ export default function App() {
   const [summary, setSummary] = useState({ totals: {}, byMeal: [] });
   const [form, setForm] = useState(emptyForm);
   const [status, setStatus] = useState({ loading: false, error: '', success: '' });
+  const [entryMode, setEntryMode] = useState('macros');
+  const [ingredientsForm, setIngredientsForm] = useState([
+    { name: '', quantityGrams: '' }
+  ]);
+  const [expandedMealId, setExpandedMealId] = useState(null);
+  const [ingredientsByMeal, setIngredientsByMeal] = useState({});
+  const [ingredientsLoadingId, setIngredientsLoadingId] = useState(null);
   const [view, setView] = useState('meals');
   const [editingId, setEditingId] = useState(null);
   const [menuOpenId, setMenuOpenId] = useState(null);
@@ -95,7 +110,11 @@ export default function App() {
       build('calories', 'Calories', 'kcal'),
       build('protein', 'Protein', 'g'),
       build('carbs', 'Carbs', 'g'),
-      build('fat', 'Fat', 'g')
+      build('fat', 'Fat', 'g'),
+      build('zinc', 'Zinc', 'mg'),
+      build('magnesium', 'Magnesium', 'mg'),
+      build('potassium', 'Potassium', 'mg'),
+      build('sodium', 'Sodium', 'mg')
     ];
   }, [goals, summary]);
 
@@ -154,6 +173,10 @@ export default function App() {
       protein: entry.protein?.toString() || '',
       carbs: entry.carbs?.toString() || '',
       fat: entry.fat?.toString() || '',
+      zinc: entry.zinc?.toString() || '',
+      magnesium: entry.magnesium?.toString() || '',
+      potassium: entry.potassium?.toString() || '',
+      sodium: entry.sodium?.toString() || '',
       notes: entry.notes || ''
     });
     setStatus({ loading: false, error: '', success: '' });
@@ -162,7 +185,52 @@ export default function App() {
   const cancelEdit = () => {
     setEditingId(null);
     setForm(emptyForm);
+    setEntryMode('macros');
     setStatus({ loading: false, error: '', success: '' });
+  };
+
+  const addIngredientRow = () => {
+    setIngredientsForm((prev) => [...prev, { name: '', quantityGrams: '' }]);
+  };
+
+  const removeIngredientRow = (index) => {
+    setIngredientsForm((prev) => prev.filter((_, idx) => idx !== index));
+  };
+
+  const handleIngredientChange = (index, field) => (event) => {
+    const value = event.target.value;
+    setIngredientsForm((prev) =>
+      prev.map((row, idx) => (idx === index ? { ...row, [field]: value } : row))
+    );
+    setStatus((prev) => ({ ...prev, error: '', success: '' }));
+  };
+
+  const toggleIngredientsForMeal = async (mealId) => {
+    if (expandedMealId === mealId) {
+      setExpandedMealId(null);
+      return;
+    }
+
+    setExpandedMealId(mealId);
+
+    if (ingredientsByMeal[mealId]) {
+      return;
+    }
+
+    setIngredientsLoadingId(mealId);
+    try {
+      const res = await fetch(`${API_URL}/api/meals/${mealId}/ingredients`);
+      if (!res.ok) {
+        setIngredientsByMeal((prev) => ({ ...prev, [mealId]: { ingredients: [] } }));
+        return;
+      }
+      const data = await res.json();
+      setIngredientsByMeal((prev) => ({ ...prev, [mealId]: data }));
+    } catch (error) {
+      setIngredientsByMeal((prev) => ({ ...prev, [mealId]: { ingredients: [] } }));
+    } finally {
+      setIngredientsLoadingId(null);
+    }
   };
 
   const handleSubmit = async (event) => {
@@ -170,22 +238,44 @@ export default function App() {
     setStatus({ loading: true, error: '', success: '' });
 
     try {
-      const response = await fetch(
-        editingId ? `${API_URL}/api/meals/${editingId}` : `${API_URL}/api/meals`,
-        {
-          method: editingId ? 'PUT' : 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            date,
-            meal: form.meal,
-            calories: form.calories,
-            protein: form.protein,
-            carbs: form.carbs,
-            fat: form.fat,
-            notes: form.notes
-          })
-        }
-      );
+      const request =
+        entryMode === 'ingredients'
+          ? {
+              url: `${API_URL}/api/meals/from-ingredients`,
+              method: 'POST',
+              body: {
+                date,
+                meal: form.meal,
+                notes: form.notes,
+                ingredients: ingredientsForm.map((item) => ({
+                  name: item.name,
+                  quantityGrams: item.quantityGrams
+                }))
+              }
+            }
+          : {
+              url: editingId ? `${API_URL}/api/meals/${editingId}` : `${API_URL}/api/meals`,
+              method: editingId ? 'PUT' : 'POST',
+              body: {
+                date,
+                meal: form.meal,
+                calories: form.calories,
+                protein: form.protein,
+                carbs: form.carbs,
+                fat: form.fat,
+                zinc: form.zinc,
+                magnesium: form.magnesium,
+                potassium: form.potassium,
+                sodium: form.sodium,
+                notes: form.notes
+              }
+            };
+
+      const response = await fetch(request.url, {
+        method: request.method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request.body)
+      });
 
       const payload = await response.json().catch(() => ({}));
 
@@ -198,6 +288,8 @@ export default function App() {
       setForm(emptyForm);
       setEditingId(null);
       setMenuOpenId(null);
+      setIngredientsForm([{ name: '', quantityGrams: '' }]);
+      setEntryMode('macros');
       setStatus({ loading: false, error: '', success: editingId ? 'Meal updated!' : 'Meal saved!' });
       await fetchData(date);
     } catch (error) {
@@ -245,6 +337,13 @@ export default function App() {
             </div>
             <div className="meal-actions">
               <span className="pill">{new Date(entry.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+              <button
+                className="ghost"
+                type="button"
+                onClick={() => toggleIngredientsForMeal(entry.id)}
+              >
+                {expandedMealId === entry.id ? 'Hide ingredients' : 'Ingredients'}
+              </button>
               <div className="menu">
                 <button
                   className="menu-trigger"
@@ -293,6 +392,52 @@ export default function App() {
             <span>Fat</span>
             <strong>{formatNumber(entry.fat)} g</strong>
           </div>
+          <div className="macro-row">
+            <span>Zinc</span>
+            <strong>{formatNumber(entry.zinc)} mg</strong>
+          </div>
+          <div className="macro-row">
+            <span>Magnesium</span>
+            <strong>{formatNumber(entry.magnesium)} mg</strong>
+          </div>
+          <div className="macro-row">
+            <span>Potassium</span>
+            <strong>{formatNumber(entry.potassium)} mg</strong>
+          </div>
+          <div className="macro-row">
+            <span>Sodium</span>
+            <strong>{formatNumber(entry.sodium)} mg</strong>
+          </div>
+
+          {expandedMealId === entry.id && (
+            <div className="ingredients-panel">
+              {ingredientsLoadingId === entry.id && <p className="muted">Loading ingredients...</p>}
+              {ingredientsLoadingId !== entry.id && (
+                <>
+                  {ingredientsByMeal[entry.id]?.ingredients?.length ? (
+                    <div className="ingredients-list">
+                      {ingredientsByMeal[entry.id].ingredients.map((ingredient) => (
+                        <div className="ingredient-row" key={ingredient.id}>
+                          <div>
+                            <strong>{ingredient.foodName}</strong>
+                            <span className="muted">{formatNumber(ingredient.quantityGrams)} g</span>
+                          </div>
+                          <div className="ingredient-macros">
+                            <span>{formatNumber(ingredient.calories)} kcal</span>
+                            <span>{formatNumber(ingredient.protein)} P</span>
+                            <span>{formatNumber(ingredient.carbs)} C</span>
+                            <span>{formatNumber(ingredient.fat)} F</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="empty">No ingredients found for this meal.</p>
+                  )}
+                </>
+              )}
+            </div>
+          )}
         </article>
       ))}
     </div>
@@ -328,6 +473,10 @@ export default function App() {
                 <span>{formatNumber(meal.protein)} P</span>
                 <span>{formatNumber(meal.carbs)} Carbs</span>
                 <span>{formatNumber(meal.fat)} Fat</span>
+                <span>{formatNumber(meal.zinc)} Zn</span>
+                <span>{formatNumber(meal.magnesium)} Mg</span>
+                <span>{formatNumber(meal.potassium)} K</span>
+                <span>{formatNumber(meal.sodium)} Na</span>
               </div>
             </div>
           ))}
@@ -363,6 +512,24 @@ export default function App() {
         <section className="card form-card">
           <h2>Add a meal</h2>
           <p className="muted">Capture what you just ate and the macros that went with it.</p>
+          <div className="tabs mode-tabs">
+            <button
+              className={entryMode === 'macros' ? 'active' : ''}
+              type="button"
+              onClick={() => setEntryMode('macros')}
+              disabled={status.loading || Boolean(editingId)}
+            >
+              Macros
+            </button>
+            <button
+              className={entryMode === 'ingredients' ? 'active' : ''}
+              type="button"
+              onClick={() => setEntryMode('ingredients')}
+              disabled={status.loading || Boolean(editingId)}
+            >
+              Ingredients
+            </button>
+          </div>
           {editingId && (
             <div className="edit-banner">
               <span>Editing meal entry</span>
@@ -379,55 +546,135 @@ export default function App() {
                 placeholder="Breakfast, Lunch, Snack..."
                 value={form.meal}
                 onChange={handleFormChange('meal')}
-                required
               />
             </label>
-            <div className="grid-2">
-              <label>
-                Calories
-                <input
-                  type="number"
-                  step="0.1"
-                  placeholder="0"
-                  value={form.calories}
-                  onChange={handleFormChange('calories')}
-                  required
-                />
-              </label>
-              <label>
-                Protein (g)
-                <input
-                  type="number"
-                  step="0.1"
-                  placeholder="0"
-                  value={form.protein}
-                  onChange={handleFormChange('protein')}
-                  required
-                />
-              </label>
-              <label>
-                Carbs (g)
-                <input
-                  type="number"
-                  step="0.1"
-                  placeholder="0"
-                  value={form.carbs}
-                  onChange={handleFormChange('carbs')}
-                  required
-                />
-              </label>
-              <label>
-                Fat (g)
-                <input
-                  type="number"
-                  step="0.1"
-                  placeholder="0"
-                  value={form.fat}
-                  onChange={handleFormChange('fat')}
-                  required
-                />
-              </label>
-            </div>
+
+            {entryMode === 'macros' ? (
+              <div className="grid-2">
+                <label>
+                  Calories
+                  <input
+                    type="number"
+                    step="0.1"
+                    placeholder="0"
+                    value={form.calories}
+                    onChange={handleFormChange('calories')}
+                    required
+                  />
+                </label>
+                <label>
+                  Protein (g)
+                  <input
+                    type="number"
+                    step="0.1"
+                    placeholder="0"
+                    value={form.protein}
+                    onChange={handleFormChange('protein')}
+                    required
+                  />
+                </label>
+                <label>
+                  Carbs (g)
+                  <input
+                    type="number"
+                    step="0.1"
+                    placeholder="0"
+                    value={form.carbs}
+                    onChange={handleFormChange('carbs')}
+                    required
+                  />
+                </label>
+                <label>
+                  Fat (g)
+                  <input
+                    type="number"
+                    step="0.1"
+                    placeholder="0"
+                    value={form.fat}
+                    onChange={handleFormChange('fat')}
+                    required
+                  />
+                </label>
+                <label>
+                  Zinc (mg)
+                  <input
+                    type="number"
+                    step="0.1"
+                    placeholder="0"
+                    value={form.zinc}
+                    onChange={handleFormChange('zinc')}
+                  />
+                </label>
+                <label>
+                  Magnesium (mg)
+                  <input
+                    type="number"
+                    step="0.1"
+                    placeholder="0"
+                    value={form.magnesium}
+                    onChange={handleFormChange('magnesium')}
+                  />
+                </label>
+                <label>
+                  Potassium (mg)
+                  <input
+                    type="number"
+                    step="0.1"
+                    placeholder="0"
+                    value={form.potassium}
+                    onChange={handleFormChange('potassium')}
+                  />
+                </label>
+                <label>
+                  Sodium (mg)
+                  <input
+                    type="number"
+                    step="0.1"
+                    placeholder="0"
+                    value={form.sodium}
+                    onChange={handleFormChange('sodium')}
+                  />
+                </label>
+              </div>
+            ) : (
+              <div className="ingredients-editor">
+                {ingredientsForm.map((row, idx) => (
+                  <div className="ingredient-input" key={idx}>
+                    <input
+                      type="text"
+                      placeholder="Food name (e.g., banana)"
+                      value={row.name}
+                      onChange={handleIngredientChange(idx, 'name')}
+                      required
+                    />
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      placeholder="Grams"
+                      value={row.quantityGrams}
+                      onChange={handleIngredientChange(idx, 'quantityGrams')}
+                      required
+                    />
+                    <button
+                      className="ghost"
+                      type="button"
+                      onClick={() => removeIngredientRow(idx)}
+                      disabled={ingredientsForm.length === 1}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+                <button className="ghost" type="button" onClick={addIngredientRow}>
+                  Add ingredient
+                </button>
+                <p className="muted">
+                  If a food is not found locally, we will look it up from OpenFoodFacts and cache it.
+                </p>
+              </div>
+            )}
+
             <label>
               Notes
               <textarea
@@ -525,6 +772,46 @@ export default function App() {
                 step="0.1"
                 value={goals.fat}
                 onChange={handleGoalChange('fat')}
+              />
+            </label>
+            <label>
+              Zinc goal (mg)
+              <input
+                type="number"
+                min="0"
+                step="0.1"
+                value={goals.zinc}
+                onChange={handleGoalChange('zinc')}
+              />
+            </label>
+            <label>
+              Magnesium goal (mg)
+              <input
+                type="number"
+                min="0"
+                step="0.1"
+                value={goals.magnesium}
+                onChange={handleGoalChange('magnesium')}
+              />
+            </label>
+            <label>
+              Potassium goal (mg)
+              <input
+                type="number"
+                min="0"
+                step="0.1"
+                value={goals.potassium}
+                onChange={handleGoalChange('potassium')}
+              />
+            </label>
+            <label>
+              Sodium goal (mg)
+              <input
+                type="number"
+                min="0"
+                step="0.1"
+                value={goals.sodium}
+                onChange={handleGoalChange('sodium')}
               />
             </label>
           </div>
