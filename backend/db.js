@@ -80,6 +80,35 @@ const initDb = () => {
     db.run(
       `CREATE INDEX IF NOT EXISTS idx_meal_date ON meal_entries (entry_date)`
     );
+
+    // Table for storing user's everyday products (temporary until ML model is ready)
+    db.run(
+      `CREATE TABLE IF NOT EXISTS my_products (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        product_name TEXT NOT NULL UNIQUE,
+        brand TEXT,
+        serving_size REAL NOT NULL,
+        serving_unit TEXT NOT NULL DEFAULT 'g',
+        calories REAL NOT NULL,
+        protein REAL NOT NULL,
+        carbs REAL NOT NULL,
+        fat REAL NOT NULL,
+        fiber REAL DEFAULT 0,
+        sugar REAL DEFAULT 0,
+        notes TEXT,
+        is_favorite INTEGER DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )`
+    );
+
+    db.run(
+      `CREATE INDEX IF NOT EXISTS idx_my_products_name ON my_products (product_name)`
+    );
+
+    db.run(
+      `CREATE INDEX IF NOT EXISTS idx_my_products_favorite ON my_products (is_favorite)`
+    );
   });
 };
 
