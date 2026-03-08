@@ -14,8 +14,18 @@ const db = new sqlite3.Database(dbPath);
 const initDb = () => {
   db.serialize(() => {
     db.run(
+      `CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )`
+    );
+
+    db.run(
       `CREATE TABLE IF NOT EXISTS meal_entries (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
         entry_date TEXT NOT NULL,
         meal TEXT NOT NULL,
         calories REAL NOT NULL,
@@ -27,14 +37,21 @@ const initDb = () => {
         potassium REAL DEFAULT 0,
         sodium REAL DEFAULT 0,
         notes TEXT,
-        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY(user_id) REFERENCES users(id)
       )`
     );
 
     // Add columns if they don't exist (for existing databases)
-    const columns = ['zinc', 'magnesium', 'potassium', 'sodium'];
+    const columns = [
+      { name: 'user_id', def: 'INTEGER NOT NULL DEFAULT 1' }, // Defaulting to 1 to not break existing rows immediately if any, though they will be orphaned effectively if no user 1.
+      { name: 'zinc', def: 'REAL DEFAULT 0' },
+      { name: 'magnesium', def: 'REAL DEFAULT 0' },
+      { name: 'potassium', def: 'REAL DEFAULT 0' },
+      { name: 'sodium', def: 'REAL DEFAULT 0' }
+    ];
     columns.forEach(col => {
-      db.run(`ALTER TABLE meal_entries ADD COLUMN ${col} REAL DEFAULT 0`, (err) => {
+      db.run(`ALTER TABLE meal_entries ADD COLUMN ${col.name} ${col.def}`, (err) => {
         // Ignore error if column already exists
       });
     });
@@ -85,7 +102,8 @@ const initDb = () => {
     db.run(
       `CREATE TABLE IF NOT EXISTS my_products (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        product_name TEXT NOT NULL UNIQUE,
+        user_id INTEGER NOT NULL,
+        product_name TEXT NOT NULL,
         brand TEXT,
         serving_size REAL NOT NULL,
         serving_unit TEXT NOT NULL DEFAULT 'g',
@@ -98,9 +116,13 @@ const initDb = () => {
         notes TEXT,
         is_favorite INTEGER DEFAULT 0,
         created_at TEXT NOT NULL DEFAULT (datetime('now')),
-        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY(user_id) REFERENCES users(id),
+        UNIQUE(user_id, product_name)
       )`
     );
+
+    db.run(`ALTER TABLE my_products ADD COLUMN user_id INTEGER NOT NULL DEFAULT 1`, (err) => { });
 
     db.run(
       `CREATE INDEX IF NOT EXISTS idx_my_products_name ON my_products (product_name)`
