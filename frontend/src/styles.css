@@ -863,3 +863,120 @@ select:focus {
   }
 }
 
+/* Auth Styles */
+.auth-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: calc(100vh - 120px);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 400px;
+  background: rgba(255, 250, 243, 0.95);
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  padding: 32px 24px;
+  box-shadow: var(--shadow);
+}
+
+.auth-card h1 {
+  font-family: 'Fraunces', serif;
+  margin: 0 0 24px;
+  text-align: center;
+}
+
+.auth-button {
+  width: 100%;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 8px;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.auth-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px -16px rgba(224, 122, 95, 0.7);
+}
+
+.auth-error {
+  background: #fbece3;
+  color: #ba2d2d;
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  margin-bottom: 16px;
+  border: 1px solid rgba(224, 122, 95, 0.4);
+}
+
+.auth-error.success {
+  background: #e6f7ec;
+  color: #2b7a60;
+  border-color: #2b7a60;
+}
+
+.auth-toggle {
+  text-align: center;
+  margin-top: 24px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.auth-toggle button {
+  background: none;
+  border: none;
+  color: var(--teal);
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+
+/* Header updates */
+.header-tabs {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  max-width: 100%;
+  padding-bottom: 12px;
+}
+
+.tabs-left {
+  display: flex;
+  gap: 12px;
+}
+
+.tabs-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.user-greeting {
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.logout-button {
+  background: #fbece3;
+  color: #ba2d2d;
+  border: 1px solid rgba(224, 122, 95, 0.4);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+}
+
+.logout-button:hover {
+  background: #ba2d2d;
+  color: #fff;
+}

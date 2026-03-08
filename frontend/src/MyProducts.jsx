@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { authFetch } from './authFetch';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -40,7 +41,7 @@ export default function MyProducts({ onAddToIngredients }) {
             if (search) params.append('search', search);
             if (showFavoritesOnly) params.append('favorite', 'true');
 
-            const res = await fetch(`${API_URL}/api/my-products?${params}`);
+            const res = await authFetch(`${API_URL}/api/my-products?${params}`);
             if (!res.ok) throw new Error('Failed to load products');
 
             const data = await res.json();
@@ -105,7 +106,7 @@ export default function MyProducts({ onAddToIngredients }) {
                 ? `${API_URL}/api/my-products/${editingId}`
                 : `${API_URL}/api/my-products`;
 
-            const response = await fetch(url, {
+            const response = await authFetch(url, {
                 method: editingId ? 'PUT' : 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(form)
@@ -138,7 +139,7 @@ export default function MyProducts({ onAddToIngredients }) {
         setStatus({ loading: true, error: '', success: '' });
 
         try {
-            const response = await fetch(`${API_URL}/api/my-products/${id}`, {
+            const response = await authFetch(`${API_URL}/api/my-products/${id}`, {
                 method: 'DELETE'
             });
 

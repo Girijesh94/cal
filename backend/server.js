@@ -1,9 +1,12 @@
 const express = require('express');
 const cors = require('cors');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 const { initDb, run, all, get, dbPath } = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
+const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_jwt_key_please_change';
 
 app.use(cors());
 app.use(express.json());
@@ -303,8 +306,63 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', dbPath });
 });
 
+// --- Auth Endpoints ---
+app.post(
+  '/api/register',
+  asyncHandler(async (req, res) => {
+    const { username, password } = req.body || {};
+    if (!username || !password) {
+      return res.status(400).json({ message: 'Username and password are required.' });
+    }
+    const hash = await bcrypt.hash(password, 10);
+    try {
+      const result = await run(`INSERT INTO users (username, password_hash) VALUES (?, ?)`, [username, hash]);
+      res.status(201).json({ id: result.id, username });
+    } catch (e) {
+      if (e.message.includes('UNIQUE')) {
+        return res.status(400).json({ message: 'Username already taken.' });
+      }
+      throw e;
+    }
+  })
+);
+
+app.post(
+  '/api/login',
+  asyncHandler(async (req, res) => {
+    const { username, password } = req.body || {};
+    if (!username || !password) {
+      return res.status(400).json({ message: 'Username and password are required.' });
+    }
+    const user = await get(`SELECT * FROM users WHERE username = ?`, [username]);
+    if (!user) {
+      return res.status(400).json({ message: 'Invalid credentials.' });
+    }
+    const match = await bcrypt.compare(password, user.password_hash);
+    if (!match) {
+      return res.status(400).json({ message: 'Invalid credentials.' });
+    }
+    const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '7d' });
+    res.json({ token, user: { id: user.id, username: user.username } });
+  })
+);
+
+// --- JWT Middleware ---
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (token == null) return res.sendStatus(401);
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) return res.sendStatus(403);
+    req.user = user;
+    next();
+  });
+};
+
 app.post(
   '/api/meals',
+  authenticateToken,
   asyncHandler(async (req, res) => {
     const { date, meal, calories, protein, carbs, fat, zinc, magnesium, potassium, sodium, notes } = req.body || {};
 
@@ -335,11 +393,12 @@ app.post(
     }
 
     const insertSql = `
-      INSERT INTO meal_entries (entry_date, meal, calories, protein, carbs, fat, zinc, magnesium, potassium, sodium, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO meal_entries (user_id, entry_date, meal, calories, protein, carbs, fat, zinc, magnesium, potassium, sodium, notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     const result = await run(insertSql, [
+      req.user.id,
       payload.date,
       payload.meal,
       payload.calories,
@@ -362,6 +421,7 @@ app.post(
 
 app.post(
   '/api/meals/from-ingredients',
+  authenticateToken,
   asyncHandler(async (req, res) => {
     const { date, meal, notes, ingredients } = req.body || {};
     const entryDate = (date || '').trim();
@@ -401,15 +461,15 @@ app.post(
 
       // 1. Check user's custom products first
       let myProduct = await get(
-        `SELECT * FROM my_products WHERE LOWER(product_name) = ?`,
-        [item.name.toLowerCase()]
+        `SELECT * FROM my_products WHERE LOWER(product_name) = ? AND user_id = ?`,
+        [item.name.toLowerCase(), req.user.id]
       );
 
       if (!myProduct) {
         // Try normalized match if direct match fails
         myProduct = await get(
-          `SELECT * FROM my_products WHERE LOWER(product_name) = ?`,
-          [normalizedName]
+          `SELECT * FROM my_products WHERE LOWER(product_name) = ? AND user_id = ?`,
+          [normalizedName, req.user.id]
         );
       }
 
@@ -554,6 +614,7 @@ app.post(
 
     const insertMealSql = `
       INSERT INTO meal_entries (
+        user_id,
         entry_date,
         meal,
         calories,
@@ -566,10 +627,11 @@ app.post(
         sodium,
         notes
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     const mealResult = await run(insertMealSql, [
+      req.user.id,
       entryDate,
       mealName,
       totals.calories,
@@ -607,6 +669,7 @@ app.post(
 
 app.get(
   '/api/meals/:id/ingredients',
+  authenticateToken,
   asyncHandler(async (req, res) => {
     const rawId = String(req.params.id || '').trim();
     const id = Number(rawId);
@@ -617,8 +680,8 @@ app.get(
     const meal = await get(
       `SELECT id, entry_date AS date, meal, calories, protein, carbs, fat, created_at
        FROM meal_entries
-       WHERE id = ?`,
-      [id]
+       WHERE id = ? AND user_id = ?`,
+      [id, req.user.id]
     );
 
     if (!meal) {
@@ -653,6 +716,7 @@ app.get(
 
 app.put(
   '/api/meals/:id',
+  authenticateToken,
   asyncHandler(async (req, res) => {
     const rawId = String(req.params.id || '').trim();
     const id = Number(rawId);
@@ -691,7 +755,7 @@ app.put(
     const updateSql = `
       UPDATE meal_entries
       SET entry_date = ?, meal = ?, calories = ?, protein = ?, carbs = ?, fat = ?, zinc = ?, magnesium = ?, potassium = ?, sodium = ?, notes = ?
-      WHERE id = ?
+      WHERE id = ? AND user_id = ?
     `;
 
     const result = await run(updateSql, [
@@ -706,14 +770,15 @@ app.put(
       payload.potassium,
       payload.sodium,
       payload.notes,
-      id
+      id,
+      req.user.id
     ]);
 
     if (result.changes === 0) {
       const fallbackResult = await run(
         `UPDATE meal_entries
          SET entry_date = ?, meal = ?, calories = ?, protein = ?, carbs = ?, fat = ?, zinc = ?, magnesium = ?, potassium = ?, sodium = ?, notes = ?
-         WHERE TRIM(CAST(id AS TEXT)) = ?`,
+         WHERE TRIM(CAST(id AS TEXT)) = ? AND user_id = ?`,
         [
           payload.date,
           payload.meal,
@@ -726,7 +791,8 @@ app.put(
           payload.potassium,
           payload.sodium,
           payload.notes,
-          rawId
+          rawId,
+          req.user.id
         ]
       );
 
@@ -741,6 +807,7 @@ app.put(
 
 app.delete(
   '/api/meals/:id',
+  authenticateToken,
   asyncHandler(async (req, res) => {
     const rawId = String(req.params.id || '').trim();
     const id = Number(rawId);
@@ -748,12 +815,12 @@ app.delete(
       return res.status(400).json({ message: 'Invalid meal id.' });
     }
 
-    const result = await run('DELETE FROM meal_entries WHERE id = ?', [id]);
+    const result = await run('DELETE FROM meal_entries WHERE id = ? AND user_id = ?', [id, req.user.id]);
 
     if (result.changes === 0) {
       const fallbackResult = await run(
-        'DELETE FROM meal_entries WHERE TRIM(CAST(id AS TEXT)) = ?',
-        [rawId]
+        'DELETE FROM meal_entries WHERE TRIM(CAST(id AS TEXT)) = ? AND user_id = ?',
+        [rawId, req.user.id]
       );
 
       if (fallbackResult.changes === 0) {
@@ -767,15 +834,16 @@ app.delete(
 
 app.get(
   '/api/meals',
+  authenticateToken,
   asyncHandler(async (req, res) => {
     const date = (req.query.date || getToday()).trim();
 
     const rows = await all(
       `SELECT id, entry_date AS date, meal, calories, protein, carbs, fat, zinc, magnesium, potassium, sodium, notes, created_at
        FROM meal_entries
-       WHERE entry_date = ?
+       WHERE entry_date = ? AND user_id = ?
        ORDER BY datetime(created_at) ASC`,
-      [date]
+      [date, req.user.id]
     );
 
     res.json({ date, entries: rows });
@@ -784,6 +852,7 @@ app.get(
 
 app.get(
   '/api/summary',
+  authenticateToken,
   asyncHandler(async (req, res) => {
     const date = (req.query.date || getToday()).trim();
 
@@ -798,8 +867,8 @@ app.get(
         COALESCE(SUM(potassium), 0) AS potassium,
         COALESCE(SUM(sodium), 0) AS sodium
        FROM meal_entries
-       WHERE entry_date = ?`,
-      [date]
+       WHERE entry_date = ? AND user_id = ?`,
+      [date, req.user.id]
     );
 
     const byMeal = await all(
@@ -832,12 +901,13 @@ app.get(
 // Get all products or search by name
 app.get(
   '/api/my-products',
+  authenticateToken,
   asyncHandler(async (req, res) => {
     const search = (req.query.search || '').trim();
     const favoriteOnly = req.query.favorite === 'true';
 
-    let sql = `SELECT * FROM my_products WHERE 1=1`;
-    const params = [];
+    let sql = `SELECT * FROM my_products WHERE user_id = ?`;
+    const params = [req.user.id];
 
     if (search) {
       sql += ` AND (product_name LIKE ? OR brand LIKE ?)`;
@@ -858,6 +928,7 @@ app.get(
 // Get a single product by ID
 app.get(
   '/api/my-products/:id',
+  authenticateToken,
   asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) {
@@ -865,8 +936,8 @@ app.get(
     }
 
     const product = await get(
-      `SELECT * FROM my_products WHERE id = ?`,
-      [id]
+      `SELECT * FROM my_products WHERE id = ? AND user_id = ?`,
+      [id, req.user.id]
     );
 
     if (!product) {
@@ -880,6 +951,7 @@ app.get(
 // Create a new product
 app.post(
   '/api/my-products',
+  authenticateToken,
   asyncHandler(async (req, res) => {
     const {
       product_name,
@@ -928,10 +1000,11 @@ app.post(
     try {
       const result = await run(
         `INSERT INTO my_products (
-          product_name, brand, serving_size, serving_unit,
+          user_id, product_name, brand, serving_size, serving_unit,
           calories, protein, carbs, fat, fiber, sugar, notes, is_favorite
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
+          req.user.id,
           payload.product_name,
           payload.brand,
           payload.serving_size,
@@ -966,6 +1039,7 @@ app.post(
 // Update a product
 app.put(
   '/api/my-products/:id',
+  authenticateToken,
   asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) {
@@ -1023,7 +1097,7 @@ app.put(
              calories = ?, protein = ?, carbs = ?, fat = ?,
              fiber = ?, sugar = ?, notes = ?, is_favorite = ?,
              updated_at = datetime('now')
-         WHERE id = ?`,
+         WHERE id = ? AND user_id = ?`,
         [
           payload.product_name,
           payload.brand,
@@ -1037,7 +1111,8 @@ app.put(
           payload.sugar,
           payload.notes,
           payload.is_favorite,
-          id
+          id,
+          req.user.id
         ]
       );
 
@@ -1061,13 +1136,14 @@ app.put(
 // Delete a product
 app.delete(
   '/api/my-products/:id',
+  authenticateToken,
   asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) {
       return res.status(400).json({ message: 'Invalid product id.' });
     }
 
-    const result = await run('DELETE FROM my_products WHERE id = ?', [id]);
+    const result = await run('DELETE FROM my_products WHERE id = ? AND user_id = ?', [id, req.user.id]);
 
     if (result.changes === 0) {
       return res.status(404).json({ message: 'Product not found.' });
@@ -1080,6 +1156,7 @@ app.delete(
 // Calculate macros for a product based on quantity
 app.post(
   '/api/my-products/:id/calculate',
+  authenticateToken,
   asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) {
@@ -1095,8 +1172,8 @@ app.post(
     }
 
     const product = await get(
-      `SELECT * FROM my_products WHERE id = ?`,
-      [id]
+      `SELECT * FROM my_products WHERE id = ? AND user_id = ?`,
+      [id, req.user.id]
     );
 
     if (!product) {

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { authFetch } from './authFetch';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -140,8 +141,8 @@ export default function TrackerView({ productToAdd, onProductAdded }) {
     setStatus((prev) => ({ ...prev, loading: true, error: '' }));
     try {
       const [mealsRes, summaryRes] = await Promise.all([
-        fetch(`${API_URL}/api/meals?date=${targetDate}`),
-        fetch(`${API_URL}/api/summary?date=${targetDate}`)
+        authFetch(`${API_URL}/api/meals?date=${targetDate}`),
+        authFetch(`${API_URL}/api/summary?date=${targetDate}`)
       ]);
 
       if (!mealsRes.ok || !summaryRes.ok) {
@@ -240,7 +241,7 @@ export default function TrackerView({ productToAdd, onProductAdded }) {
 
     setIngredientsLoadingId(mealId);
     try {
-      const res = await fetch(`${API_URL}/api/meals/${mealId}/ingredients`);
+      const res = await authFetch(`${API_URL}/api/meals/${mealId}/ingredients`);
       if (!res.ok) {
         setIngredientsByMeal((prev) => ({ ...prev, [mealId]: { ingredients: [] } }));
         return;
@@ -292,7 +293,7 @@ export default function TrackerView({ productToAdd, onProductAdded }) {
             }
           };
 
-      const response = await fetch(request.url, {
+      const response = await authFetch(request.url, {
         method: request.method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(request.body)
@@ -325,7 +326,7 @@ export default function TrackerView({ productToAdd, onProductAdded }) {
     setStatus({ loading: true, error: '', success: '' });
 
     try {
-      const response = await fetch(`${API_URL}/api/meals/${id}`, {
+      const response = await authFetch(`${API_URL}/api/meals/${id}`, {
         method: 'DELETE'
       });
 
