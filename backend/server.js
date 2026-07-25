@@ -894,6 +894,45 @@ app.get(
   })
 );
 
+app.get(
+  '/api/analytics/daily',
+  authenticateToken,
+  asyncHandler(async (req, res) => {
+    let endDate = (req.query.endDate || getToday()).trim();
+    let startDate = req.query.startDate ? req.query.startDate.trim() : null;
+
+    if (!startDate) {
+      const end = new Date(endDate);
+      const start = new Date(end);
+      start.setDate(end.getDate() - 6);
+      const offset = start.getTimezoneOffset();
+      const localStart = new Date(start.getTime() - offset * 60000);
+      startDate = localStart.toISOString().slice(0, 10);
+    }
+
+    const rows = await all(
+      `SELECT
+        entry_date AS date,
+        COALESCE(SUM(calories), 0) AS calories,
+        COALESCE(SUM(protein), 0) AS protein,
+        COALESCE(SUM(carbs), 0) AS carbs,
+        COALESCE(SUM(fat), 0) AS fat,
+        COUNT(*) AS mealCount
+       FROM meal_entries
+       WHERE user_id = ? AND entry_date >= ? AND entry_date <= ?
+       GROUP BY entry_date
+       ORDER BY entry_date ASC`,
+      [req.user.id, startDate, endDate]
+    );
+
+    res.json({
+      startDate,
+      endDate,
+      daily: rows
+    });
+  })
+);
+
 // ============================================
 // MY PRODUCTS ENDPOINTS (Temporary until ML model is ready)
 // ============================================

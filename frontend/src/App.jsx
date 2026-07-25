@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import TrackerView from './TrackerView';
 import MyProducts from './MyProducts';
+import CalorieGraphView from './CalorieGraphView';
 import Auth from './Auth';
 
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem('cal_token') || null);
   const [username, setUsername] = useState(localStorage.getItem('cal_username') || null);
-  const [mainView, setMainView] = useState('tracker'); // 'tracker' or 'products'
+  const [mainView, setMainView] = useState('tracker'); // 'tracker', 'trends', or 'products'
   const [ingredientsToAdd, setIngredientsToAdd] = useState(null);
 
   useEffect(() => {
@@ -43,6 +44,13 @@ export default function App() {
             📊 Tracker
           </button>
           <button
+            className={mainView === 'trends' ? 'active' : ''}
+            onClick={() => setMainView('trends')}
+            type="button"
+          >
+            🔥 Calorie Trends
+          </button>
+          <button
             className={mainView === 'products' ? 'active' : ''}
             onClick={() => setMainView('products')}
             type="button"
@@ -58,6 +66,8 @@ export default function App() {
 
       {mainView === 'tracker' ? (
         <TrackerView productToAdd={ingredientsToAdd} onProductAdded={() => setIngredientsToAdd(null)} />
+      ) : mainView === 'trends' ? (
+        <CalorieGraphView />
       ) : (
         <div className="products-container">
           <header className="hero">
